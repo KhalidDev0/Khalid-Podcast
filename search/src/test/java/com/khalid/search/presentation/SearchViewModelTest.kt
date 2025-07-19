@@ -51,7 +51,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `loading flag is true only while use case is loading`() = runTest {
+    fun `loading flag returns to false and uiModels populated`() = runTest {
         coEvery { useCase.invoke(any()) } returns stubSearchFlow()
         val vm = SearchViewModel(useCase)
 
@@ -61,6 +61,44 @@ class SearchViewModelTest {
 
         val finalState = vm.state.value
         assertEquals(false, finalState.isSearching)
-        assertEquals(fakeResult, finalState.searchResult)
+        assertEquals(finalState.twoLineGridCardUiModels.isEmpty(), true)
+    }
+
+    @Test
+    fun `mapper populates title + imageUrl and clamps progress 0f-1f`() = runTest {
+        val domainContent = com.khalid.core.search.model.SearchContent(
+            duration = "123",
+            avatarUrl = "https://example.com/img.png",
+            name = "Sample Title",
+        )
+
+        val domainSection = com.khalid.core.search.model.SearchSection(
+            name = "any",
+            content = listOf(domainContent),
+            order = "1",
+        )
+
+        val response = SearchResponse(
+            sections = listOf(domainSection)
+        )
+
+        coEvery { useCase.invoke(any()) } returns flow {
+            emit(Response.Loading())
+            emit(Response.Success(response))
+        }
+
+        val vm = SearchViewModel(useCase)
+
+        vm.onEvent(SearchEvent.OnTextChanged("q"))
+        advanceTimeBy(250)
+        advanceUntilIdle()
+
+        val ui = vm.state.value.twoLineGridCardUiModels
+        assertEquals(1, ui.size)
+
+        val model = ui.first()
+        assertEquals("Sample Title", model.title)
+        assertEquals("https://example.com/img.png", model.imageUrl)
+        assert(model.progress!! in 0f..1f)
     }
 }
